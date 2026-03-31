@@ -1,15 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="25706cb3-5aec-4f3c-8be1-bd8a3e6d3588" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/traffic_final.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/traffic_final.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.ipynb_checkpoints/ml_model-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/.ipynb_checkpoints/ml_model-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.ipynb_checkpoints/yolo_detect-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/.ipynb_checkpoints/yolo_detect-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ml_model.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/ml_model.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/yolo_detect.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/yolo_detect.ipynb" afterDir="false" />
-    </list>
+    <list default="true" id="25706cb3-5aec-4f3c-8be1-bd8a3e6d3588" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
