@@ -10,3 +10,4 @@ lapx
 boto3
 yt-dlp
 seaborn
+minio
