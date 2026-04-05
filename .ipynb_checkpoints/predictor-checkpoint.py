@@ -1,0 +1,170 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "bc1609b2-5fc8-4e46-af7e-8956a3eb5d17",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import psycopg2\n",
+    "import time\n",
+    "from sklearn.ensemble import GradientBoostingRegressor\n",
+    "from datetime import datetime, timedelta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "ce36d78b-8daf-4fc7-bd52-a4946affe9b5",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\Users\\muzhi\\AppData\\Local\\Temp\\ipykernel_23268\\307643942.py:10: UserWarning: pandas only supports SQLAlchemy connectable (engine/connection) or database string URI or sqlite3 DBAPI2 connection. Other DBAPI2 objects are not tested. Please consider using SQLAlchemy.\n",
+      "  df = pd.read_sql(query, conn)\n",
+      "C:\\Users\\muzhi\\AppData\\Local\\Temp\\ipykernel_23268\\307643942.py:13: FutureWarning: 'S' is deprecated and will be removed in a future version, please use 's' instead.\n",
+      "  df['snap_time'] = df['detection_time'].dt.floor('S')\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "✅ Модель обучена. Готова к работе с таблицей traffic_predictions.\n",
+      "[21:48:48] Записан прогноз: 1 ТС на время 22:48:48\n",
+      "[21:49:19] Записан прогноз: 1 ТС на время 22:49:19\n",
+      "[21:49:50] Записан прогноз: 1 ТС на время 22:49:50\n",
+      "[21:50:21] Записан прогноз: 1 ТС на время 22:50:21\n",
+      "[21:50:52] Записан прогноз: 1 ТС на время 22:50:52\n",
+      "[21:51:23] Записан прогноз: 1 ТС на время 22:51:23\n",
+      "[21:51:54] Записан прогноз: 1 ТС на время 22:51:54\n",
+      "[21:52:25] Записан прогноз: 1 ТС на время 22:52:25\n",
+      "[21:52:57] Записан прогноз: 1 ТС на время 22:52:57\n",
+      "[21:53:28] Записан прогноз: 1 ТС на время 22:53:28\n",
+      "[21:53:59] Записан прогноз: 1 ТС на время 22:53:59\n",
+      "[21:54:30] Записан прогноз: 1 ТС на время 22:54:30\n",
+      "[21:55:01] Записан прогноз: 1 ТС на время 22:55:01\n",
+      "[21:55:32] Записан прогноз: 1 ТС на время 22:55:32\n",
+      "\n",
+      "🛑 Остановлено.\n"
+     ]
+    }
+   ],
+   "source": [
+    "# --- КОНФИГУРАЦИЯ ---\n",
+    "DB_URL = \"dbname=user43 user=user43 password=m5q3x8tpc7vn host=2.nntc.nnov.ru port=5402\"\n",
+    "HORIZON = 60 \n",
+    "\n",
+    "# 1. Обучение модели на мгновенные снимки\n",
+    "try:\n",
+    "    with psycopg2.connect(DB_URL) as conn:\n",
+    "        # Берем данные для обучения из витрины очистки (которую мы создали ранее)\n",
+    "        query = \"SELECT detection_time, track_id FROM user43.v_ml_traffic_cleaned\"\n",
+    "        df = pd.read_sql(query, conn)\n",
+    "    \n",
+    "    df['detection_time'] = pd.to_datetime(df['detection_time'])\n",
+    "    df['snap_time'] = df['detection_time'].dt.floor('S')\n",
+    "    \n",
+    "    # Считаем количество машин в каждую секунду\n",
+    "    df_snaps = df.groupby('snap_time')['track_id'].nunique().reset_index(name='cars_now')\n",
+    "    df_snaps = df_snaps.sort_values('snap_time')\n",
+    "\n",
+    "    # Таргет — количество машин ровно через 60 минут\n",
+    "    df_target = df_snaps.copy()\n",
+    "    df_target['snap_time'] = df_target['snap_time'] - timedelta(minutes=HORIZON)\n",
+    "    \n",
+    "    final_data = pd.merge_asof(\n",
+    "        df_snaps, \n",
+    "        df_target[['snap_time', 'cars_now']], \n",
+    "        on='snap_time', \n",
+    "        direction='forward', \n",
+    "        suffixes=('', '_future'),\n",
+    "        tolerance=pd.Timedelta('1min')\n",
+    "    )\n",
+    "    \n",
+    "    valid_data = final_data.dropna()\n",
+    "    model = GradientBoostingRegressor(n_estimators=100, random_state=42)\n",
+    "    model.fit(valid_data[['cars_now']], valid_data['cars_now_future'])\n",
+    "    print(\"✅ Модель обучена. Готова к работе с таблицей traffic_predictions.\")\n",
+    "\n",
+    "except Exception as e:\n",
+    "    print(f\"❌ Ошибка обучения: {e}\")\n",
+    "    exit()\n",
+    "\n",
+    "# 2. Функция прогнозирования и записи в БД\n",
+    "def predict_and_store():\n",
+    "    try:\n",
+    "        with psycopg2.connect(DB_URL) as conn:\n",
+    "            with conn.cursor() as cur:\n",
+    "                # Получаем текущее мгновенное количество машин\n",
+    "                cur.execute(\"\"\"\n",
+    "                    SELECT COUNT(DISTINCT track_id) \n",
+    "                    FROM user43.full_tracking_data \n",
+    "                    WHERE detection_time >= (SELECT MAX(detection_time) FROM user43.full_tracking_data) - INTERVAL '1 second'\n",
+    "                \"\"\")\n",
+    "                curr_cars = float(cur.fetchone()[0] or 0)\n",
+    "                \n",
+    "                now = datetime.now()\n",
+    "                target_time = (now + timedelta(minutes=HORIZON)).replace(microsecond=0)\n",
+    "                \n",
+    "                # Прогноз\n",
+    "                pred_val = round(float(model.predict(pd.DataFrame([[curr_cars]], columns=['cars_now']))[0]))\n",
+    "                pred_val = max(0, pred_val)\n",
+    "                \n",
+    "                # ВАЖНО: Вставляем только существующие колонки:\n",
+    "                # prediction_made, target_time, horizon_minutes, predicted_intensity\n",
+    "                cur.execute(\"\"\"\n",
+    "                    INSERT INTO user43.traffic_predictions \n",
+    "                    (prediction_made_at, target_time, horizon_minutes, predicted_intensity) \n",
+    "                    VALUES (NOW(), %s, %s, %s)\n",
+    "                \"\"\", (target_time, HORIZON, pred_val))\n",
+    "                \n",
+    "                print(f\"[{now.strftime('%H:%M:%S')}] Записан прогноз: {int(pred_val)} ТС на время {target_time.strftime('%H:%M:%S')}\")\n",
+    "                \n",
+    "    except Exception as e:\n",
+    "        print(f\"❌ Ошибка вставки в БД: {e}\")\n",
+    "\n",
+    "# Цикл работы\n",
+    "try:\n",
+    "    while True:\n",
+    "        predict_and_store()\n",
+    "        time.sleep(30)\n",
+    "except KeyboardInterrupt:\n",
+    "    print(\"\\n🛑 Остановлено.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f9ffc492-dd76-46fb-ac95-8ba4ada554f7",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.14.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
