@@ -12,7 +12,7 @@ PYTHON_EXE = '/usr/bin/python3'
 SCRIPTS_DIR = f'{PROJECT_ROOT}/airflow_home/scripts'
 
 default_args = {
-    'owner': 'user43',
+    'owner': 'user',
     'depends_on_past': False,
     'start_date': datetime(2026, 4, 5),
     'retries': 1,
@@ -23,7 +23,7 @@ with DAG(
     'transport_system_pipeline',
     default_args=default_args,
     description='Оркестрация детекции и прогнозирования',
-    schedule_interval='*/1 * * * *', # Раз в 10 минут
+    schedule_interval='*/1 * * * *', # Раз в минуту
     catchup=False
 ) as dag:
 
@@ -37,7 +37,7 @@ with DAG(
     # Задача №2: Очистка
     cleanup_task = BashOperator(
         task_id='cleanup_raw_data',
-        bash_command='psql $DB_URL -c "DELETE FROM user43.full_tracking_data WHERE detection_time < NOW() - INTERVAL \'2 days\';"'
+        bash_command='psql $DB_URL -c "DELETE FROM user43.full_tracking_data WHERE detection_time < NOW() - INTERVAL \'100 days\';"'
     )
     # Задача №0: Детектор (собирает свежие данные 10-20 секунд)
     detect_task = BashOperator(
